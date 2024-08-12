@@ -8,9 +8,12 @@ import mongoose from "mongoose";
 const generateAccessandRefreshToken = async (userID) => {
   try {
     const User = await user.findById(userID);
-    const accessToken = User.generateAccessToken();
-    const refreshToken = User.generateRefreshToken();
+    const accessToken =await  User.generateAccessToken();
+    
+    const refreshToken =await User.generateRefreshToken();
+    
     User.refreshToken = refreshToken;
+    console.log(User.refreshToken);
     await User.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
   } catch (error) {
@@ -45,6 +48,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if (existedUser) {
     throw new ApiError(409, "User already exists");
   }
+  // console.log(req.files);
   const avatarLocalPath = req.files?.avatar[0]?.path;
   const coverImageLocalPath = req.files?.coverImage[0]?.path;
   if (!avatarLocalPath) {
@@ -96,6 +100,7 @@ const loginUser = asyncHandler(async (req, res) => {
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid user credentials");
   }
+  
 
   const { accessToken, refreshToken } = await generateAccessandRefreshToken(
     User._id
@@ -103,6 +108,7 @@ const loginUser = asyncHandler(async (req, res) => {
   const loggedinUser = await user
     .findOne(User._id)
     .select("-password -refreshToken");
+    
 
   const options = {
     httpOnly: true,
@@ -119,7 +125,7 @@ const loginUser = asyncHandler(async (req, res) => {
         {
           user: loggedinUser,
           accessToken,
-          refreshToken,
+          refreshToken
         },
         "User logged in successfully"
       )
@@ -130,8 +136,8 @@ const logoutUser = asyncHandler(async (req, res) => {
   await user.findByIdAndUpdate(
     req.user._id,
     {
-      $set: {
-        refreshToken: undefined,
+      $unset: {
+        refreshToken: 1,
       },
     },
     {
@@ -153,7 +159,8 @@ const logoutUser = asyncHandler(async (req, res) => {
 const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingrefreshtoken =
     req.cookies.refreshToken || req.body.refreshToken;
-  if (incomingrefreshtoken) {
+    console.log(incomingrefreshtoken);
+  if (!incomingrefreshtoken) {
     throw new ApiError(401, "Invalid refresh token");
   }
   try {
@@ -161,11 +168,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       incomingrefreshtoken,
       process.env.REFRESH_TOKEN_SECRET
     );
-    const User = user.findById(decodedToken._id);
+    const User =await user.findById(decodedToken._id);
     if (!User) {
       throw new ApiError(401, "Unauthorized user");
     }
-    if (!incomingrefreshtoken !== user?.refreshToken) {
+    if (incomingrefreshtoken !== User?.refreshToken) {
       throw new ApiError(401, "invalid refresh token");
     }
     const options = {
@@ -216,7 +223,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
   if (!(fullname && email)) {
     throw new ApiError(400, "Full name and email both are required");
   }
-  const User = user
+  const User =await user
     .findByIdAndUpdate(
       req.user?.id,
       {
@@ -228,7 +235,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     .select("-password");
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "Account updated successfully"));
+    .json(new ApiResponse(200, User, "Account updated successfully"));
 });
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
@@ -254,7 +261,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     .select("-password");
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "Avatar updated successfully"));
+    .json(new ApiResponse(200, User, "Avatar updated successfully"));
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
@@ -332,6 +339,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
       },
     },
   ]);
+  console.log(channel);
   if (!channel?.length) {
     throw new ApiError(404, "Channel does not exist");
   }
